@@ -50,6 +50,7 @@ public class EntityStackSettings extends StackSettings {
     public static final String SLIME_ACCURATE_DROPS_WITH_KILL_ENTIRE_STACK_ON_DEATH = "accurate-drops-with-kill-entire-stack-on-death";
     public static final String MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK = "drop-additional-mushrooms-for-each-cow-in-stack";
     public static final String MOOSHROOM_EXTRA_MUSHROOMS_PER_COW_IN_STACK = "extra-mushrooms-per-cow-in-stack";
+    public static final String CAT_DONT_STACK_IF_DIFFERENT_TYPE = "dont-stack-if-different-type";
 
     // Data pertaining to this EntityType
     private final EntityType entityType;
@@ -95,6 +96,7 @@ public class EntityStackSettings extends StackSettings {
                 this.putSetting(SHEEP_SHEAR_ALL_SHEEP_IN_STACK, true);
                 this.putSetting(SHEEP_PERCENTAGE_OF_WOOL_TO_REGROW_PER_GRASS_EATEN, 25.0);
             }
+            case CAT -> this.putSetting(CAT_DONT_STACK_IF_DIFFERENT_TYPE, false);
             case SLIME, MAGMA_CUBE -> this.putSetting(SLIME_ACCURATE_DROPS_WITH_KILL_ENTIRE_STACK_ON_DEATH, true);
             case MUSHROOM_COW -> {
                 this.putSetting(MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK, true);
