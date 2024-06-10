@@ -16,6 +16,7 @@ import dev.rosewood.rosestacker.stack.StackedEntity;
 import dev.rosewood.rosestacker.stack.settings.conditions.entity.StackConditions;
 import dev.rosewood.rosestacker.utils.PersistentDataUtils;
 import dev.rosewood.rosestacker.utils.StackerUtils;
+import dev.rosewood.rosestacker.utils.VersionUtils;
 import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.EnumSet;
@@ -24,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.logging.Logger;
 import java.util.stream.Collectors;
 import org.bukkit.Material;
 import org.bukkit.entity.Ageable;
@@ -45,6 +47,7 @@ public class EntityStackSettings extends StackSettings {
 
     // Entity-specific settings
     public static final String CHICKEN_MULTIPLY_EGG_DROPS_BY_STACK_SIZE = "multiply-egg-drops-by-stack-size";
+    public static final String CREEPER_EXPLODE_KILL_ENTIRE_STACK = "explode-kill-entire-stack";
     public static final String SHEEP_SHEAR_ALL_SHEEP_IN_STACK = "shear-all-sheep-in-stack";
     public static final String SHEEP_PERCENTAGE_OF_WOOL_TO_REGROW_PER_GRASS_EATEN = "percentage-of-wool-to-regrow-per-grass-eaten";
     public static final String SLIME_ACCURATE_DROPS_WITH_KILL_ENTIRE_STACK_ON_DEATH = "accurate-drops-with-kill-entire-stack-on-death";
@@ -90,18 +93,21 @@ public class EntityStackSettings extends StackSettings {
             this.stackConditions.add(new StackConditionEntry<>(stackCondition));
 
         this.extraSettings = new HashMap<>();
+
         switch (this.entityType) {
             case CHICKEN -> this.putSetting(CHICKEN_MULTIPLY_EGG_DROPS_BY_STACK_SIZE, true);
+            case CREEPER -> this.putSetting(CREEPER_EXPLODE_KILL_ENTIRE_STACK, false);
             case SHEEP -> {
                 this.putSetting(SHEEP_SHEAR_ALL_SHEEP_IN_STACK, true);
                 this.putSetting(SHEEP_PERCENTAGE_OF_WOOL_TO_REGROW_PER_GRASS_EATEN, 25.0);
             }
             case CAT -> this.putSetting(CAT_DONT_STACK_IF_DIFFERENT_TYPE, false);
             case SLIME, MAGMA_CUBE -> this.putSetting(SLIME_ACCURATE_DROPS_WITH_KILL_ENTIRE_STACK_ON_DEATH, true);
-            case MUSHROOM_COW -> {
-                this.putSetting(MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK, true);
-                this.putSetting(MOOSHROOM_EXTRA_MUSHROOMS_PER_COW_IN_STACK, 5);
-            }
+        }
+
+        if (this.entityType == VersionUtils.MOOSHROOM) {
+            this.putSetting(MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK, true);
+            this.putSetting(MOOSHROOM_EXTRA_MUSHROOMS_PER_COW_IN_STACK, 5);
         }
 
         this.setDefaults();
@@ -364,10 +370,12 @@ public class EntityStackSettings extends StackSettings {
 
         private final StackConditions.StackCondition<T> condition;
         private boolean enabled;
+        private boolean displayedWarning;
 
         public StackConditionEntry(StackConditions.StackCondition<T> condition) {
             this.condition = condition;
             this.enabled = true;
+            this.displayedWarning = false;
         }
 
         public EntityStackComparisonResult apply(EntityStackSettings stackSettings, StackedEntity stack1,
@@ -376,16 +384,29 @@ public class EntityStackSettings extends StackSettings {
             if (!this.enabled)
                 return EntityStackComparisonResult.CAN_STACK;
 
-            // TODO: No clue why this is needed. Somehow the case breaks because the entity types aren't the same. What?
-            if (entity1.getClass() != entity2.getClass())
+            Class<?> requiredClass = this.condition.clazz();
+            if (!requiredClass.isAssignableFrom(entity1.getClass()) || !requiredClass.isAssignableFrom(entity2.getClass())) {
+                this.printWarning(entity1, entity2);
                 return EntityStackComparisonResult.DIFFERENT_ENTITY_TYPES;
+            }
 
             try {
                 return this.condition.function().apply(stackSettings, stack1, stack2, (T) entity1, (T) entity2, comparingForUnstack, ignorePositions);
             } catch (ClassCastException e) {
-                RoseStacker.getInstance().getLogger().warning(String.format("Failed to cast entities [%s, %s]", entity1.getClass().getSimpleName(), entity2.getClass().getSimpleName()));
+                this.printWarning(entity1, entity2);
                 return EntityStackComparisonResult.DIFFERENT_ENTITY_TYPES;
             }
+        }
+
+        private void printWarning(Entity entity1, Entity entity2) {
+            if (this.displayedWarning)
+                return;
+
+            RoseStacker.getInstance().getLogger().severe(String.format("An error occurred while apply entity stack condition: {key=%s, class=%s}. " +
+                    "Entity classes: [%s, %s]. This condition will always fail. Please report this to the plugin author. A stacktrace will be printed below.",
+                    this.condition.configProperties().key(), this.condition.clazz().getName(), entity1.getClass().getName(), entity2.getClass().getName()));
+            new RuntimeException("Stack condition apply error").printStackTrace();
+            this.displayedWarning = true;
         }
 
         public void setDefaults() {

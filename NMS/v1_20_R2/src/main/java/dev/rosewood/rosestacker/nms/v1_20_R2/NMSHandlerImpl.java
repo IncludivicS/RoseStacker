@@ -2,7 +2,7 @@ package dev.rosewood.rosestacker.nms.v1_20_R2;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import dev.rosewood.rosestacker.nms.NMSAdapter;
+import dev.rosewood.rosegarden.utils.NMSUtil;
 import dev.rosewood.rosestacker.nms.NMSHandler;
 import dev.rosewood.rosestacker.nms.hologram.Hologram;
 import dev.rosewood.rosestacker.nms.spawner.StackedSpawnerTile;
@@ -12,6 +12,7 @@ import dev.rosewood.rosestacker.nms.storage.StackedEntityDataStorageType;
 import dev.rosewood.rosestacker.nms.util.ReflectionUtils;
 import dev.rosewood.rosestacker.nms.v1_20_R2.entity.SoloEntitySpider;
 import dev.rosewood.rosestacker.nms.v1_20_R2.entity.SoloEntityStrider;
+import dev.rosewood.rosestacker.nms.v1_20_R2.event.AsyncEntityDeathEventImpl;
 import dev.rosewood.rosestacker.nms.v1_20_R2.hologram.HologramImpl;
 import dev.rosewood.rosestacker.nms.v1_20_R2.spawner.StackedSpawnerTileImpl;
 import dev.rosewood.rosestacker.nms.v1_20_R2.storage.NBTEntityDataEntry;
@@ -77,6 +78,7 @@ import org.bukkit.craftbukkit.v1_20_R2.entity.CraftCreeper;
 import org.bukkit.craftbukkit.v1_20_R2.entity.CraftEntity;
 import org.bukkit.craftbukkit.v1_20_R2.entity.CraftLivingEntity;
 import org.bukkit.craftbukkit.v1_20_R2.entity.CraftPlayer;
+import org.bukkit.craftbukkit.v1_20_R2.entity.CraftItem;
 import org.bukkit.craftbukkit.v1_20_R2.inventory.CraftItemStack;
 import org.bukkit.craftbukkit.v1_20_R2.util.CraftChatMessage;
 import org.bukkit.craftbukkit.v1_20_R2.util.CraftNamespacedKey;
@@ -85,8 +87,11 @@ import org.bukkit.entity.Creeper;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Item;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
 import sun.misc.Unsafe;
 
 @SuppressWarnings("unchecked")
@@ -117,6 +122,8 @@ public class NMSHandlerImpl implements NMSHandler {
 
     private static Field field_Entity_spawnedViaMobSpawner; // Field to get the spawnedViaMobSpawner of an Entity, added by Paper, normally public
 
+    private static Field field_ItemEntity_despawnRate; // Field to get the despawn rate of an ItemEntity
+
     static {
         try {
             Field field_Creeper_DATA_IS_IGNITED = ReflectionUtils.getFieldByPositionAndType(net.minecraft.world.entity.monster.Creeper.class, 2, EntityDataAccessor.class);
@@ -135,7 +142,7 @@ public class NMSHandlerImpl implements NMSHandler {
                 field_ServerLevel_entityLookup = ReflectionUtils.getFieldByName(ServerLevel.class, "entityLookup");
             }
 
-            if (NMSAdapter.isPaper())
+            if (NMSUtil.isPaper())
                 field_Entity_spawnReason = ReflectionUtils.getFieldByPositionAndType(Entity.class, 0, SpawnReason.class);
             entityCounter = (AtomicInteger) ReflectionUtils.getFieldByPositionAndType(Entity.class, 0, AtomicInteger.class).get(null);
 
@@ -150,8 +157,10 @@ public class NMSHandlerImpl implements NMSHandler {
 
             field_AbstractVillager_offers = ReflectionUtils.getFieldByPositionAndType(net.minecraft.world.entity.npc.AbstractVillager.class, 0, MerchantOffers.class);
 
-            if (NMSAdapter.isPaper())
+            if (NMSUtil.isPaper()) {
                 field_Entity_spawnedViaMobSpawner = ReflectionUtils.getFieldByName(Entity.class, "spawnedViaMobSpawner");
+                field_ItemEntity_despawnRate = ReflectionUtils.getFieldByName(net.minecraft.world.entity.item.ItemEntity.class, "despawnRate");
+            }
         } catch (ReflectiveOperationException e) {
             e.printStackTrace();
         }
@@ -467,6 +476,24 @@ public class NMSHandlerImpl implements NMSHandler {
     @Override
     public void setCustomNameUncapped(org.bukkit.entity.Entity entity, String customName) {
         ((CraftEntity) entity).getHandle().setCustomName(CraftChatMessage.fromStringOrNull(customName));
+    }
+
+    @Override
+    public int getItemDespawnRate(Item item) {
+        if (field_ItemEntity_despawnRate == null)
+            return ((CraftWorld) item.getWorld()).getHandle().spigotConfig.itemDespawnRate;
+
+        try {
+            return (int) field_ItemEntity_despawnRate.get(((CraftItem) item).getHandle());
+        } catch (ReflectiveOperationException e) {
+            e.printStackTrace();
+            throw new IllegalStateException("Unable to get item despawn rate");
+        }
+    }
+
+    @Override
+    public EntityDeathEvent createAsyncEntityDeathEvent(@NotNull LivingEntity what, @NotNull List<ItemStack> drops, int droppedExp) {
+        return new AsyncEntityDeathEventImpl(what, drops, droppedExp);
     }
 
     public void addEntityToWorld(ServerLevel world, Entity entity) throws ReflectiveOperationException {

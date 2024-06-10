@@ -2,7 +2,7 @@ package dev.rosewood.rosestacker.nms.v1_17_R1;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
-import dev.rosewood.rosestacker.nms.NMSAdapter;
+import dev.rosewood.rosegarden.utils.NMSUtil;
 import dev.rosewood.rosestacker.nms.NMSHandler;
 import dev.rosewood.rosestacker.nms.hologram.Hologram;
 import dev.rosewood.rosestacker.nms.spawner.StackedSpawnerTile;
@@ -13,6 +13,7 @@ import dev.rosewood.rosestacker.nms.util.ReflectionUtils;
 import dev.rosewood.rosestacker.nms.v1_17_R1.entity.SoloEntitySpider;
 import dev.rosewood.rosestacker.nms.v1_17_R1.entity.SoloEntityStrider;
 import dev.rosewood.rosestacker.nms.v1_17_R1.entity.SynchedEntityDataWrapper;
+import dev.rosewood.rosestacker.nms.v1_17_R1.event.AsyncEntityDeathEventImpl;
 import dev.rosewood.rosestacker.nms.v1_17_R1.hologram.HologramImpl;
 import dev.rosewood.rosestacker.nms.v1_17_R1.spawner.StackedSpawnerTileImpl;
 import dev.rosewood.rosestacker.nms.v1_17_R1.storage.NBTEntityDataEntry;
@@ -56,6 +57,7 @@ import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.item.trading.MerchantOffers;
 import net.minecraft.world.level.BaseSpawner;
 import net.minecraft.world.level.ClipContext;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.SpawnerBlockEntity;
 import net.minecraft.world.level.entity.PersistentEntitySectionManager;
@@ -79,8 +81,12 @@ import org.bukkit.entity.Creeper;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
+import org.bukkit.entity.Item;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
+import org.jetbrains.annotations.NotNull;
+import org.spigotmc.SpigotWorldConfig;
 import sun.misc.Unsafe;
 
 @SuppressWarnings("unchecked")
@@ -115,7 +121,7 @@ public class NMSHandlerImpl implements NMSHandler {
             field_LivingEntity_brain = ReflectionUtils.getFieldByPositionAndType(net.minecraft.world.entity.LivingEntity.class, 0, Brain.class);
 
             field_ServerLevel_entityManager = ReflectionUtils.getFieldByPositionAndType(ServerLevel.class, 0, PersistentEntitySectionManager.class);
-            if (NMSAdapter.isPaper())
+            if (NMSUtil.isPaper())
                 field_Entity_spawnReason = ReflectionUtils.getFieldByPositionAndType(Entity.class, 0, SpawnReason.class);
             entityCounter = (AtomicInteger) ReflectionUtils.getFieldByPositionAndType(Entity.class, 0, AtomicInteger.class).get(null);
 
@@ -400,6 +406,16 @@ public class NMSHandlerImpl implements NMSHandler {
     @Override
     public void setCustomNameUncapped(org.bukkit.entity.Entity entity, String customName) {
         ((CraftEntity) entity).getHandle().setCustomName(CraftChatMessage.fromStringOrNull(customName));
+    }
+
+    @Override
+    public int getItemDespawnRate(Item item) {
+        return ((CraftWorld) item.getWorld()).getHandle().spigotConfig.itemDespawnRate;
+    }
+
+    @Override
+    public EntityDeathEvent createAsyncEntityDeathEvent(@NotNull LivingEntity what, @NotNull List<ItemStack> drops, int droppedExp) {
+        return new AsyncEntityDeathEventImpl(what, drops, droppedExp);
     }
 
     private SpawnReason toBukkitSpawnReason(MobSpawnType mobSpawnType) {

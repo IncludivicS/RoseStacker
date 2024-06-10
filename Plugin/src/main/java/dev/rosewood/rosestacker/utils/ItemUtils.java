@@ -35,7 +35,6 @@ import org.bukkit.GameMode;
 import org.bukkit.Material;
 import org.bukkit.NamespacedKey;
 import org.bukkit.block.CreatureSpawner;
-import org.bukkit.enchantments.Enchantment;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.Player;
 import org.bukkit.inventory.EquipmentSlot;
@@ -211,10 +210,28 @@ public final class ItemUtils {
         itemMeta.setDisplayName(displayString);
 
         if (ConfigurationManager.Setting.SPAWNER_HIDE_VANILLA_ITEM_LORE.getBoolean())
-            itemMeta.addItemFlags(ItemFlag.values());
+            itemMeta.addItemFlags(VersionUtils.HIDE_ADDITIONAL_TOOLTIP);
 
-        // Set the lore, if defined
-        List<String> lore = RoseStacker.getInstance().getManager(LocaleManager.class).getLocaleMessages("stack-item-lore-spawner", placeholders);
+        // Set the lore
+        LocaleManager localeManager = RoseStacker.getInstance().getManager(LocaleManager.class);
+        List<String> globalLore, typeLore;
+        if (amount == 1) {
+            globalLore = localeManager.getLocaleMessages("stack-item-lore-spawner", placeholders);
+            typeLore = stackSettings.getItemLoreSingular(placeholders);
+        } else {
+            globalLore = localeManager.getLocaleMessages("stack-item-lore-spawner-plural", placeholders);
+            typeLore = stackSettings.getItemLorePlural(placeholders);
+        }
+
+        List<String> lore = new ArrayList<>(globalLore.size() + typeLore.size());
+        if (ConfigurationManager.Setting.MISC_SPAWNER_LORE_DISPLAY_GLOBAL_LORE_FIRST.getBoolean()) {
+            lore.addAll(globalLore);
+            lore.addAll(typeLore);
+        } else {
+            lore.addAll(typeLore);
+            lore.addAll(globalLore);
+        }
+
         if (!lore.isEmpty())
             itemMeta.setLore(lore);
 
@@ -228,10 +245,9 @@ public final class ItemUtils {
 
         itemStack.setItemMeta(itemMeta);
 
-        // Set stack size and spawned entity type
+        // Set stack size
         NMSHandler nmsHandler = NMSAdapter.getHandler();
         itemStack = nmsHandler.setItemStackNBT(itemStack, "StackSize", amount);
-        itemStack = nmsHandler.setItemStackNBT(itemStack, "EntityType", spawnerType.getEnumName());
 
         return itemStack;
     }
@@ -284,21 +300,18 @@ public final class ItemUtils {
         if (itemStack.getType() != Material.SPAWNER)
             return null;
 
-        // First, check our NBT value
-        NMSHandler nmsHandler = NMSAdapter.getHandler();
-        String entityTypeName = nmsHandler.getItemStackNBTString(itemStack, "EntityType");
-        if (!entityTypeName.isEmpty()) {
-            try {
-                if (entityTypeName.equals("EMPTY"))
-                    return null;
-                return EntityType.valueOf(entityTypeName);
-            } catch (Exception ignored) { }
+        // First, check the spawner block state entity type
+        ItemMeta itemMeta = itemStack.getItemMeta();
+        if (itemMeta instanceof BlockStateMeta blockStateMeta && blockStateMeta.hasBlockState()) {
+            CreatureSpawner creatureSpawner = (CreatureSpawner) blockStateMeta.getBlockState();
+            return creatureSpawner.getSpawnedType();
         }
 
         // Try formats from other plugins/servers
 
         // Purpur servers
-        entityTypeName = nmsHandler.getItemStackNBTString(itemStack, "Purpur.mob_type");
+        NMSHandler nmsHandler = NMSAdapter.getHandler();
+        String entityTypeName = nmsHandler.getItemStackNBTString(itemStack, "Purpur.mob_type");
 
         // SilkSpawners
         if (entityTypeName.isEmpty())
@@ -324,16 +337,6 @@ public final class ItemUtils {
                         return EntityType.valueOf(entityTypeName);
             } catch (Exception ignored) { }
         }
-
-        // Try checking the spawner data then?
-        ItemMeta itemMeta = itemStack.getItemMeta();
-        if (itemMeta == null)
-            return null;
-
-        BlockStateMeta blockStateMeta = (BlockStateMeta) itemMeta;
-        CreatureSpawner creatureSpawner = (CreatureSpawner) blockStateMeta.getBlockState();
-        if (creatureSpawner.getSpawnedType() != EntityType.PIG)
-            return creatureSpawner.getSpawnedType();
 
         // Use the name to determine the type, must be colored
         String name = ChatColor.stripColor(itemMeta.getDisplayName());
@@ -396,8 +399,8 @@ public final class ItemUtils {
 
         meta.setDisplayName(name);
         meta.setLore(lore);
-        meta.addItemFlags(ItemFlag.values());
-        meta.addEnchant(Enchantment.ARROW_INFINITE, 1, true);
+        meta.addItemFlags(ItemFlag.HIDE_ENCHANTS, VersionUtils.HIDE_ADDITIONAL_TOOLTIP);
+        meta.addEnchant(VersionUtils.INFINITY, 1, true);
 
         item.setItemMeta(meta);
         cachedStackingTool = item;

@@ -6,6 +6,7 @@ import dev.rosewood.rosegarden.config.RoseSetting;
 import dev.rosewood.rosegarden.manager.AbstractConfigurationManager;
 import dev.rosewood.rosestacker.RoseStacker;
 import dev.rosewood.rosestacker.nms.storage.StackedEntityDataStorageType;
+import dev.rosewood.rosestacker.utils.VersionUtils;
 import java.util.Arrays;
 import java.util.List;
 import java.util.stream.Stream;
@@ -46,7 +47,7 @@ public class ConfigurationManager extends AbstractConfigurationManager {
         ENTITY_MULTIKILL_AMOUNT("global-entity-settings.multikill-options.multikill-amount", 5, "The amount of mobs in the stack to kill at a time", "If using the multikill enchantment, this will be the number of mobs killed per enchantment level"),
         ENTITY_MULTIKILL_PLAYER_ONLY("global-entity-settings.multikill-options.multikill-player-only", false, "Should the multikill only apply when done directly by a player?"),
         ENTITY_MULTIKILL_ENCHANTMENT_ENABLED("global-entity-settings.multikill-options.multikill-enchantment-enabled", false, "Should an enchantment on the tool be required to be able to use the multikill features?"),
-        ENTITY_MULTIKILL_ENCHANTMENT_TYPE("global-entity-settings.multikill-options.multikill-enchantment-type", Enchantment.SWEEPING_EDGE.getKey().getKey(), "The enchantment required to be able to use the multikill features", "Only used if the above setting is enabled"),
+        ENTITY_MULTIKILL_ENCHANTMENT_TYPE("global-entity-settings.multikill-options.multikill-enchantment-type", VersionUtils.SWEEPING_EDGE.getKey().getKey(), "The enchantment required to be able to use the multikill features", "Only used if the above setting is enabled"),
         ENTITY_KILL_TRANSFER_VELOCITY("global-entity-settings.kill-transfer-velocity", true, "Should knockback be transferred to the next entity in the stack?"),
         ENTITY_KILL_TRANSFER_FIRE("global-entity-settings.kill-transfer-fire", true, "Should fire be transferred to the next entity in the stack?"),
         ENTITY_KILL_DELAY_NEXT_SPAWN("global-entity-settings.kill-delay-next-spawn", false, "Should the next entity in the stack be delayed from spawning by one tick after the previous mob dies?", "Enabling this can prevent the newly spawned entity from taking the same damage as the previous one.", "May result in not being able to kill the entities as fast"),
@@ -87,6 +88,7 @@ public class ConfigurationManager extends AbstractConfigurationManager {
         ITEM_DISPLAY_CUSTOM_NAMES("global-item-settings.display-custom-names", true, "Should items with custom names be shown on their tags?"),
         ITEM_DISPLAY_CUSTOM_NAMES_COLOR("global-item-settings.display-custom-names-color", true, "Should the color of custom names be shown on their tags?"),
         ITEM_DISPLAY_CUSTOM_NAMES_ALWAYS("global-item-settings.display-custom-names-always", true, "Should items with a custom name always display their tags?", "This mirrors vanilla behavior"),
+        ITEM_DISPLAY_DESPAWN_TIMER_PLACEHOLDER("global-item-settings.display-despawn-timer-placeholder", false, "Should the %timer% placeholder be available in item display tags?", "You will need to add the %timer% placeholder to the item display tag in your locale file manually", "Placeholder updates will occur at the same frequency as item-stack-frequency"),
         ITEM_RESET_DESPAWN_TIMER_ON_MERGE("global-item-settings.reset-despawn-timer-on-merge", true, "Should the item despawn timer be reset when an item is merged into it?"),
         ITEM_MERGE_INTO_NEWEST("global-item-settings.merge-into-newest", false, "Should items be merged into the newest stack?"),
 
@@ -115,7 +117,8 @@ public class ConfigurationManager extends AbstractConfigurationManager {
         SPAWNER_DISPLAY_TAGS_HEIGHT_OFFSET("global-spawner-settings.display-tags-height-offset", 0.75, "The height offset of the hologram relative to the spawner"),
         SPAWNER_DISABLE_MOB_AI("global-spawner-settings.disable-mob-ai", false, "Should mob AI be disabled for mobs spawned by spawners?"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS("global-spawner-settings.disable-mob-ai-options", null, "Options to apply to mobs with disabled AI"),
-        SPAWNER_DISABLE_MOB_AI_OPTIONS_REMOVE_GOALS("global-spawner-settings.disable-mob-ai-options.remove-goals", true, "Should mob goals be removed? This includes movement and targeting"),
+        SPAWNER_DISABLE_MOB_AI_OPTIONS_REMOVE_GOALS("global-spawner-settings.disable-mob-ai-options.remove-goals", true, "Should mob goals be removed? This includes movement and targeting along with other mob AI behaviors.", "This cannot be undone without a full restart."),
+        SPAWNER_DISABLE_MOB_AI_OPTIONS_SET_UNAWARE("global-spawner-settings.disable-mob-ai-options.set-unaware", true, "Should mobs be set to be unaware?"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS_UNDEAD_BURN_IN_DAYLIGHT("global-spawner-settings.disable-mob-ai-options.undead-burn-in-daylight", false, "Should undead mobs be able to burn in the daylight?"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS_SILENCE("global-spawner-settings.disable-mob-ai-options.silence", true, "Should mobs be silenced so they don't make any sounds?"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS_NO_KNOCKBACK("global-spawner-settings.disable-mob-ai-options.no-knockback", true, "Should knockback be disabled?"),
@@ -123,6 +126,7 @@ public class ConfigurationManager extends AbstractConfigurationManager {
         SPAWNER_DISABLE_MOB_AI_OPTIONS_KILL_ENTIRE_STACK_ON_DEATH("global-spawner-settings.disable-mob-ai-options.kill-entire-stack-on-death", false, "Should the entire stack of mobs be killed on death?", "This will only apply to mobs with disabled AI and overwrites any other settings if this is set to true"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS_DISABLE_ZOMBIFICATION("global-spawner-settings.disable-mob-ai-options.disable-zombification", true, "Should mobs with disabled AI be immune to zombification?"),
         SPAWNER_DISABLE_MOB_AI_OPTIONS_DISABLE_ITEM_PICKUP("global-spawner-settings.disable-mob-ai-options.disable-item-pickup", true, "Should mobs with disabled AI be unable to pick up items?"),
+        SPAWNER_DISABLE_MOB_AI_OPTIONS_REENABLE_AI_ON_SPLIT("global-spawner-settings.disable-mob-ai-options.reenable-ai-on-split", false, "Should mobs with disabled AI have their AI re-enabled when they are split from the stack?", "Example: Adding a nametag to a mob to re-enable AI in combination with the dont-stack-custom-named setting"),
         SPAWNER_DISABLE_MOB_AI_ONLY_PLAYER_PLACED("global-spawner-settings.disable-mob-ai-only-player-placed", false, "Should only spawners placed by players spawn mobs with disabled AI?", "disable-mob-ai must be enabled for this to work"),
         SPAWNER_DISABLE_ATTACKING("global-spawner-settings.disable-attacking", false, "Should mobs spawned from spawners be prevented from attacking anything?"),
         SPAWNER_REMOVE_EQUIPMENT("global-spawner-settings.remove-equipment", false, "Should mobs spawned from spawners always spawn with no equipment?"),
@@ -219,8 +223,12 @@ public class ConfigurationManager extends AbstractConfigurationManager {
         MISC_CLEARLAG_CLEAR_ITEMS("misc-settings.clearlag-clear-items", false, "If Clearlag is installed, should we clear stacked items?"),
         MISC_CLEARALL_REMOVE_SINGLE("misc-settings.clearall-remove-single", false, "Should single mobs be removed with `/rs clearall`?", "This will also affect the clearlag-clear-entities setting above"),
         MISC_MYTHICMOBS_ALLOW_STACKING("misc-settings.mythicmobs-allow-stacking", false, "Should mobs owned by MythicMobs be allowed to stack?", "This is recommended to keep set to false unless you specifically only change mob attributes"),
-        MISC_SPAWNER_PERSISTENT_COMPATIBILITY("misc-settings.spawner-persistent-compatibility", true, "Some plugins like Jobs, mcMMO, and RoseLoot store special data for spawner mobs.", "Disabling this will cause the functionality within those plugins to break."),
+        MISC_SPAWNER_PERSISTENT_COMPATIBILITY("misc-settings.spawner-persistent-compatibility", true, "Some plugins like Jobs, mcMMO, and RoseLoot store special data for spawner mobs.", "Disabling this will cause the functionality within those plugins to break.", "The individual plugin hooks can be configured separately below"),
+        MISC_SPAWNER_JOBS_COMPATIBILITY("misc-settings.spawner-jobs-compatibility", true, "Disabling this will make Jobs no longer recognize spawner entities as spawned from a spawner"),
+        MISC_SPAWNER_MCMMO_COMPATIBILITY("misc-settings.spawner-mcmmo-compatibility", true, "Disabling this will make mcMMO no longer recognize spawner entities as spawned from a spawner"),
+        MISC_SPAWNER_ROSELOOT_COMPATIBILITY("misc-settings.spawner-roseloot-compatibility", true, "Disabling this will make RoseLoot no longer recognize spawner entities as spawned from a spawner"),
         MISC_STACK_STATISTICS("misc-settings.stack-statistics", true, "Should statistics be accurately tracked for stacked entities?", "This can cause issues if you expect players to kill multiple billion mobs"),
+        MISC_SPAWNER_LORE_DISPLAY_GLOBAL_LORE_FIRST("misc-settings.spawner-lore-display-global-lore-first", true, "Should global lore be displayed before spawner type lore?"),
         ;
 
         private final String key;

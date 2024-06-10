@@ -11,11 +11,14 @@ import org.bukkit.World;
 import org.bukkit.entity.Creeper;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.EntityType;
+import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.entity.Player;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
+import org.bukkit.event.entity.EntityDeathEvent;
 import org.bukkit.inventory.ItemStack;
 import org.jetbrains.annotations.ApiStatus;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * Allows performing certain actions that are only possible through the use of NMS.
@@ -40,12 +43,12 @@ public interface NMSHandler {
             "ArmorItems", "HandItems", "Items", "ChestedHorse", "Saddle",
             "DecorItem", "Inventory", "carriedBlockState", "DeathTime", "Health",
             "Attributes", "ActiveEffects", "ArmorDropChances", "HandDropChances", "Brain",
-            "LeftHanded", "Team",
+            "LeftHanded", "Team", "SaddleItem",
 
             "armor_items", "hand_items", "items", "chested_horse", "saddle",
             "decor_item", "inventory", "carried_block_state", "death_time", "health",
             "attributes", "active_effects", "armor_drop_chances", "hand_drop_chances", "brain",
-            "left_handed", "team"
+            "left_handed", "team", "saddle_item"
     );
 
     /**
@@ -266,6 +269,11 @@ public interface NMSHandler {
 
     }
 
+    /**
+     * Sets the entity's fromMobSpawner property on paper servers
+     *
+     * @param entity The entity
+     */
     default void setPaperFromMobSpawner(Entity entity) {
 
     }
@@ -278,5 +286,9 @@ public interface NMSHandler {
      * @param customName The custom name to set
      */
     void setCustomNameUncapped(Entity entity, String customName);
+
+    int getItemDespawnRate(Item item);
+
+    EntityDeathEvent createAsyncEntityDeathEvent(@NotNull LivingEntity what, @NotNull List<ItemStack> drops, int droppedExp);
 
 }
