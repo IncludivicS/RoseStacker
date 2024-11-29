@@ -165,7 +165,7 @@ public final class StackConditions {
         // Register conditions for specific interfaces
         registerConfig(Colorable.class, "different-color", false, EntityStackComparisonResult.DIFFERENT_COLORS, (entity1, entity2) -> entity1.getColor() != entity2.getColor());
         registerConfig(Sittable.class, "sitting", false, EntityStackComparisonResult.SITTING, (entity1, entity2) -> entity1.isSitting() || entity2.isSitting());
-        registerConfig(Tameable.class, "tamed", false, EntityStackComparisonResult.TAMED, (entity1, entity2) -> entity1.isTamed() || entity2.isTamed());
+        registerConfig(Tameable.class, "tamed", false, EntityStackComparisonResult.TAMED, (entity1, entity2) -> !entity1.isTamed() || !entity2.isTamed());
         registerConfig(Tameable.class, "different-owners", false, EntityStackComparisonResult.DIFFERENT_OWNERS, (entity1, entity2) -> {
             AnimalTamer tamer1 = entity1.getOwner();
             AnimalTamer tamer2 = entity2.getOwner();

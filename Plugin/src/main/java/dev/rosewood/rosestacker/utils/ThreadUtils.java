@@ -4,6 +4,7 @@ import dev.rosewood.rosegarden.RosePlugin;
 import dev.rosewood.rosegarden.scheduler.RoseScheduler;
 import dev.rosewood.rosestacker.RoseStacker;
 import org.bukkit.Bukkit;
+import org.bukkit.scheduler.BukkitRunnable;
 
 public final class ThreadUtils {
 
