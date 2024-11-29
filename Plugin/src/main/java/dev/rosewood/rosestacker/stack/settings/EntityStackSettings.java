@@ -72,6 +72,8 @@ public class EntityStackSettings extends StackSettings {
     private final Boolean onlyStackFromSpawners;
     private final StackedEntityDataStorageType dataStorageTypeOverride;
     private final Boolean disableAllMobAI;
+    private final Boolean differentColor;
+    private final Boolean differentStyle;
 
     public EntityStackSettings(CommentedFileConfiguration settingsFileConfiguration, JsonObject jsonObject, EntityType entityType) {
         super(settingsFileConfiguration);
@@ -137,6 +139,9 @@ public class EntityStackSettings extends StackSettings {
         String dataStorageTypeValue = this.settingsConfiguration.getString("data-storage-type", "default");
         this.dataStorageTypeOverride = dataStorageTypeValue.equalsIgnoreCase("default") ? null : StackedEntityDataStorageType.fromName(dataStorageTypeValue);
         this.disableAllMobAI = this.settingsConfiguration.getDefaultedBoolean("disable-all-mob-ai");
+
+        this.differentColor = this.settingsConfiguration.getDefaultedBoolean("dont-stack-if-different-color");
+        this.differentStyle = this.settingsConfiguration.getDefaultedBoolean("dont-stack-if-different-style");
 
         this.stackConditions.forEach(StackConditionEntry::load);
         this.extraSettings.values().forEach(EntitySetting::load);
@@ -252,6 +257,14 @@ public class EntityStackSettings extends StackSettings {
         if (this.killEntireStackOnDeath != null)
             return this.killEntireStackOnDeath;
         return SettingKey.ENTITY_KILL_ENTIRE_STACK_ON_DEATH.get();
+    }
+
+    public boolean dontStackIfDifferentColor() {
+        return Objects.requireNonNullElse(this.differentColor, false);
+    }
+
+    public boolean dontStackIfDifferentStyle() {
+        return Objects.requireNonNullElse(this.differentStyle, false);
     }
 
     public double getMergeRadius() {
