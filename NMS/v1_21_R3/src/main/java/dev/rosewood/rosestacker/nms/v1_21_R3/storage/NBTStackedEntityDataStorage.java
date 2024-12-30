@@ -1,4 +1,4 @@
-package dev.rosewood.rosestacker.nms.v1_21_R2.storage;
+package dev.rosewood.rosestacker.nms.v1_21_R3.storage;
 
 import dev.rosewood.rosestacker.nms.NMSAdapter;
 import dev.rosewood.rosestacker.nms.NMSHandler;
@@ -7,12 +7,13 @@ import dev.rosewood.rosestacker.nms.storage.StackedEntityDataIOException;
 import dev.rosewood.rosestacker.nms.storage.StackedEntityDataStorage;
 import dev.rosewood.rosestacker.nms.storage.StackedEntityDataStorageType;
 import dev.rosewood.rosestacker.nms.storage.StorageMigrationType;
-import dev.rosewood.rosestacker.nms.v1_21_R2.NMSHandlerImpl;
+import dev.rosewood.rosestacker.nms.v1_21_R3.NMSHandlerImpl;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.ListIterator;
