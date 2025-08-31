@@ -14,7 +14,7 @@ allprojects {
     apply plugin: 'java-library'
     apply plugin: 'com.github.johnrengelman.shadow'
     group = 'dev.rosewood'
-    version = '1.5.31'
+    version = '1.5.37-SNAPSHOT'
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
 
@@ -39,7 +39,7 @@ allprojects {
         maven { url = 'https://repo.extendedclip.com/content/repositories/placeholderapi/' }
         maven { url = 'https://mvn.lumine.io/repository/maven-public/' }
         maven { url = 'https://maven.playpro.com' }
-        maven { url = 'https://repo.fvdh.dev/releases' }
+        maven { url = 'https://repo.bsdevelopment.org/releases' }
         maven { url = 'https://nexus.neetgames.com/repository/maven-releases/' }
         maven { url = 'https://jitpack.io' }
 
@@ -72,6 +72,8 @@ dependencies {
     implementation project(path: ':NMS:v1_21_R1', configuration: 'remapped')
     implementation project(path: ':NMS:v1_21_R2', configuration: 'remapped')
     implementation project(path: ':NMS:v1_21_R3', configuration: 'remapped')
+    implementation project(path: ':NMS:v1_21_R4', configuration: 'remapped')
+    implementation project(path: ':NMS:v1_21_R5', configuration: 'remapped')
 }
 
 shadowJar {

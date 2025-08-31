@@ -2,9 +2,12 @@ package dev.rosewood.rosestacker.manager;
 
 import dev.rosewood.rosegarden.RosePlugin;
 import dev.rosewood.rosegarden.manager.Manager;
+import dev.rosewood.rosegarden.scheduler.task.ScheduledTask;
 import dev.rosewood.rosestacker.config.SettingKey;
+import dev.rosewood.rosestacker.hook.WorldGuardHook;
 import dev.rosewood.rosestacker.nms.spawner.SpawnerType;
 import dev.rosewood.rosestacker.nms.storage.StackedEntityDataStorageType;
+import dev.rosewood.rosestacker.stack.Stack;
 import dev.rosewood.rosestacker.stack.StackedBlock;
 import dev.rosewood.rosestacker.stack.StackedEntity;
 import dev.rosewood.rosestacker.stack.StackedItem;
@@ -18,8 +21,10 @@ import dev.rosewood.rosestacker.stack.settings.SpawnerStackSettings;
 import dev.rosewood.rosestacker.utils.DataUtils;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import javax.annotation.Nullable;
@@ -34,7 +39,6 @@ import org.bukkit.entity.Item;
 import org.bukkit.entity.LivingEntity;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
 import org.bukkit.inventory.ItemStack;
-import org.bukkit.scheduler.BukkitTask;
 import org.jetbrains.annotations.NotNull;
 
 /**
@@ -43,8 +47,9 @@ import org.jetbrains.annotations.NotNull;
 public class StackManager extends Manager implements StackingLogic {
 
     private final Map<UUID, StackingThread> stackingThreads;
+    private final Set<String> disabledWorldNames;
 
-    private BukkitTask autosaveTask;
+    private ScheduledTask autosaveTask;
 
     private boolean isEntityStackingTemporarilyDisabled;
     private boolean isEntityUnstackingTemporarilyDisabled;
@@ -58,6 +63,7 @@ public class StackManager extends Manager implements StackingLogic {
         super(rosePlugin);
 
         this.stackingThreads = new ConcurrentHashMap<>();
+        this.disabledWorldNames = new HashSet<>();
 
         this.isEntityStackingTemporarilyDisabled = false;
     }
@@ -65,6 +71,7 @@ public class StackManager extends Manager implements StackingLogic {
     @Override
     public void reload() {
         this.entityDataStorageType = StackedEntityDataStorageType.fromName(SettingKey.ENTITY_DATA_STORAGE_TYPE.get());
+        this.disabledWorldNames.addAll(SettingKey.DISABLED_WORLDS.get());
 
         // Load a new StackingThread per world
         Bukkit.getWorlds().forEach(this::loadWorld);
@@ -73,7 +80,7 @@ public class StackManager extends Manager implements StackingLogic {
         long autosaveFrequency = SettingKey.AUTOSAVE_FREQUENCY.get();
         if (autosaveFrequency > 0) {
             long interval = autosaveFrequency * 20 * 60;
-            this.autosaveTask = Bukkit.getScheduler().runTaskTimer(this.rosePlugin, () -> this.saveAllData(false), interval, interval);
+            this.autosaveTask = this.rosePlugin.getScheduler().runTaskTimer(() -> this.saveAllData(false), interval, interval);
         }
 
         String multikillAmountValue = SettingKey.ENTITY_MULTIKILL_AMOUNT.get();
@@ -103,6 +110,8 @@ public class StackManager extends Manager implements StackingLogic {
         // Close and clear StackingThreads
         this.stackingThreads.values().forEach(StackingThread::close);
         this.stackingThreads.clear();
+
+        this.disabledWorldNames.clear();
     }
 
     @Override
@@ -391,9 +400,37 @@ public class StackManager extends Manager implements StackingLogic {
     }
 
     @Override
+    public <T extends Stack<?>> void saveChunkEntityStacks(List<T> stacks, boolean clearStored) {
+        if (stacks.isEmpty())
+            return;
+
+        StackingThread stackingThread = this.getStackingThread(stacks.get(0).getWorld());
+        if (stackingThread != null)
+            stackingThread.saveChunkEntityStacks(stacks, clearStored);
+    }
+
+    @Override
     public void saveAllData(boolean clearStored) {
         for (StackingThread stackingThread : this.stackingThreads.values())
             stackingThread.saveAllData(clearStored);
+    }
+
+    @Override
+    public void tryStackEntity(StackedEntity stackedEntity) {
+        StackingThread stackingThread = this.getStackingThread(stackedEntity.getEntity().getWorld());
+        if (stackingThread == null)
+            return;
+
+        stackingThread.tryStackEntity(stackedEntity);
+    }
+
+    @Override
+    public void tryStackItem(StackedItem stackedItem) {
+        StackingThread stackingThread = this.getStackingThread(stackedItem.getItem().getWorld());
+        if (stackingThread == null)
+            return;
+
+        stackingThread.tryStackItem(stackedItem);
     }
 
     @Override
@@ -508,7 +545,20 @@ public class StackManager extends Manager implements StackingLogic {
     public boolean isWorldDisabled(World world) {
         if (world == null)
             return true;
-        return SettingKey.DISABLED_WORLDS.get().stream().anyMatch(x -> x.equalsIgnoreCase(world.getName()));
+        return this.disabledWorldNames.contains(world.getName());
+    }
+
+    /**
+     * Checks if stacking is disabled at a given Location
+     *
+     * @param location the Location to check
+     * @return true if stacking is disabled at the location, otherwise false
+     */
+    public boolean isAreaDisabled(Location location) {
+        World world = location.getWorld();
+        if (this.isWorldDisabled(world))
+            return true;
+        return !WorldGuardHook.testLocation(location);
     }
 
     public void changeStackingThread(UUID entityUUID, StackedEntity stackedEntity, World from, World to) {

@@ -23,6 +23,14 @@ public final class ThreadUtils {
         }
     }
 
+    public static void runOffPrimary(Runnable runnable) {
+        if (!Bukkit.isPrimaryThread()) {
+            runnable.run();
+        } else {
+            runAsync(runnable);
+        }
+    }
+
     public static void runSync(Runnable runnable) {
         if (checkEnabled())
             SCHEDULER.runTask(runnable);

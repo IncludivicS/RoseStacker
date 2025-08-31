@@ -16,6 +16,7 @@ import dev.rosewood.rosestacker.stack.settings.EntityStackSettings;
 import dev.rosewood.rosestacker.utils.PersistentDataUtils;
 import dev.rosewood.rosestacker.utils.VersionUtils;
 import java.util.List;
+import java.util.Objects;
 import org.bukkit.Material;
 import org.bukkit.entity.AbstractHorse;
 import org.bukkit.entity.Ageable;
@@ -156,10 +157,26 @@ public final class StackConditions {
                 }
             }
 
+            if (!comparingForUnstack && SettingKey.ENTITY_DONT_STACK_FROM_TRIAL_SPAWNERS.get() && NMSUtil.getVersionNumber() >= 21)
+                if (PersistentDataUtils.isSpawnedFromTrialSpawner(entity1) || PersistentDataUtils.isSpawnedFromTrialSpawner(entity2))
+                    return EntityStackComparisonResult.FROM_TRIAL_SPAWNER;
+
             if (SettingKey.ENTITY_DONT_STACK_IF_ACTIVE_RAIDER.get() && (NMS_HANDLER.isActiveRaider(entity1) || NMS_HANDLER.isActiveRaider(entity2)))
                 return EntityStackComparisonResult.PART_OF_ACTIVE_RAID;
 
+            if (stack1.checkNPC() || stack2.checkNPC())
+                return EntityStackComparisonResult.CUSTOM_MOB;
+
             return EntityStackComparisonResult.CAN_STACK;
+        });
+
+        // Register settings for all entities
+        registerConfig(LivingEntity.class, "different-custom-name", false, EntityStackComparisonResult.DIFFERENT_CUSTOM_NAME, (entity1, entity2) -> {
+            if (NMSUtil.isPaper()) {
+                return !Objects.equals(entity1.customName(), entity2.customName());
+            } else {
+                return !Objects.equals(entity1.getCustomName(), entity2.getCustomName());
+            }
         });
 
         // Register conditions for specific interfaces

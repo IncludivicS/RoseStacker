@@ -20,14 +20,15 @@ import org.bukkit.inventory.meta.ItemMeta;
 
 public class StackedItem extends Stack<ItemStackSettings> implements Comparable<StackedItem> {
 
+    private static final char MAGIC_AMPERSAND = '\uFDD0';
+    private static final char MAGIC_LESS_THAN = '\uFDD1';
+    private static final char MAGIC_POUND     = '\uFDD2';
+
     private int size;
     private Item item;
 
     private ItemStackSettings stackSettings;
-
-    public StackedItem(int size, Item item) {
-        this(size, item, true);
-    }
+    private double x, y, z;
 
     public StackedItem(int size, Item item, boolean updateDisplay) {
         this.size = size;
@@ -36,9 +37,13 @@ public class StackedItem extends Stack<ItemStackSettings> implements Comparable<
         if (this.item != null) {
             this.stackSettings = RoseStacker.getInstance().getManager(StackSettingManager.class).getItemStackSettings(this.item);
 
-            if (updateDisplay && Bukkit.isPrimaryThread())
+            if (updateDisplay)
                 this.updateDisplay();
         }
+    }
+
+    public StackedItem(int size, Item item) {
+        this(size, item, true);
     }
 
     public Item getItem() {
@@ -94,14 +99,16 @@ public class StackedItem extends Stack<ItemStackSettings> implements Comparable<
             return;
         }
 
-        ItemMeta itemMeta = itemStack.getItemMeta();
-
         String displayName = null;
-        boolean hasCustomName = itemMeta != null && itemMeta.hasDisplayName();
-        if (hasCustomName && SettingKey.ITEM_DISPLAY_CUSTOM_NAMES.get()) {
-            displayName = itemMeta.getDisplayName();
-        } else if (NMSUtil.getVersionNumber() >= 21 && itemMeta.hasItemName()) { // Support item_name component in 1.21+
-            displayName = itemMeta.getItemName();
+        boolean hasCustomName = false;
+        ItemMeta itemMeta = itemStack.getItemMeta();
+        if (itemMeta != null) {
+            if (itemMeta.hasDisplayName() && SettingKey.ITEM_DISPLAY_CUSTOM_NAMES.get()) {
+                displayName = itemMeta.getDisplayName();
+                hasCustomName = true;
+            } else if (NMSUtil.getVersionNumber() >= 21 && itemMeta.hasItemName()) { // Support item_name component in 1.21+
+                displayName = itemMeta.getItemName();
+            }
         }
 
         if (displayName != null && !SettingKey.ITEM_DISPLAY_CUSTOM_NAMES_COLOR.get())
@@ -109,6 +116,8 @@ public class StackedItem extends Stack<ItemStackSettings> implements Comparable<
 
         if (displayName == null)
             displayName = this.stackSettings.getDisplayName();
+
+        displayName = displayName.replace('&', MAGIC_AMPERSAND).replace('<', MAGIC_LESS_THAN).replace('#', MAGIC_POUND);
 
         StringPlaceholders.Builder placeholdersBuilder = StringPlaceholders.builder()
                 .add("amount", StackerUtils.formatNumber(this.getStackSize()))
@@ -133,6 +142,8 @@ public class StackedItem extends Stack<ItemStackSettings> implements Comparable<
         } else {
             displayString = RoseStacker.getInstance().getManager(LocaleManager.class).getLocaleMessage("item-stack-display-single", placeholdersBuilder.build());
         }
+
+        displayString = displayString.replace(MAGIC_AMPERSAND, '&').replace(MAGIC_LESS_THAN, '<').replace(MAGIC_POUND, '#');
 
         this.item.setCustomNameVisible((this.size > 1 || SettingKey.ITEM_DISPLAY_TAGS_SINGLE.get() || (SettingKey.ITEM_DISPLAY_CUSTOM_NAMES_ALWAYS.get() && hasCustomName)) &&
                 (this.size > itemStack.getMaxStackSize() || !SettingKey.ITEM_DISPLAY_TAGS_ABOVE_VANILLA_STACK_SIZE.get()));
@@ -165,6 +176,20 @@ public class StackedItem extends Stack<ItemStackSettings> implements Comparable<
             return entity1.getTicksLived() > entity2.getTicksLived() ? 2 : -2;
 
         return this.getStackSize() > stack2.getStackSize() ? 1 : -1;
+    }
+
+    /**
+     * @return true if the entity has moved since the last time this method was called, false otherwise
+     */
+    public boolean hasMoved() {
+        Location location = this.item.getLocation();
+        boolean moved = location.getX() != this.x || location.getY() != this.y || location.getZ() != this.z;
+        if (moved) {
+            this.x = location.getX();
+            this.y = location.getY();
+            this.z = location.getZ();
+        }
+        return moved;
     }
 
 }

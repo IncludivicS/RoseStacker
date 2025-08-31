@@ -19,6 +19,7 @@ import dev.rosewood.rosestacker.stack.settings.EntityStackSettings;
 import dev.rosewood.rosestacker.stack.settings.ItemStackSettings;
 import dev.rosewood.rosestacker.stack.settings.MultikillBound;
 import dev.rosewood.rosestacker.stack.settings.SpawnerStackSettings;
+import dev.rosewood.rosestacker.utils.EntityUtils;
 import dev.rosewood.rosestacker.utils.ItemUtils;
 import dev.rosewood.rosestacker.utils.PersistentDataUtils;
 import dev.rosewood.rosestacker.utils.StackerUtils;
@@ -71,27 +72,30 @@ public class EntityListener implements Listener {
     );
 
     private final RosePlugin rosePlugin;
+    private final StackManager stackManager;
+    private final StackSettingManager stackSettingManager;
 
     public EntityListener(RosePlugin rosePlugin) {
         this.rosePlugin = rosePlugin;
+        this.stackManager = rosePlugin.getManager(StackManager.class);
+        this.stackSettingManager = rosePlugin.getManager(StackSettingManager.class);
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onEntitySpawn(EntitySpawnEvent event) {
         Entity entity = event.getEntity();
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(entity.getWorld()))
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
             return;
 
-        if (!stackManager.isItemStackingEnabled() || stackManager.isEntityStackingTemporarilyDisabled())
+        if (!this.stackManager.isItemStackingEnabled() || this.stackManager.isEntityStackingTemporarilyDisabled())
             return;
 
         if (entity instanceof Item item) {
-            ItemStackSettings itemStackSettings = this.rosePlugin.getManager(StackSettingManager.class).getItemStackSettings(item);
+            ItemStackSettings itemStackSettings = this.stackSettingManager.getItemStackSettings(item);
             if (itemStackSettings != null && !itemStackSettings.isStackingEnabled())
                 return;
 
-            StackedItem stackedItem = stackManager.createItemStack(item, true);
+            StackedItem stackedItem = this.stackManager.createItemStack(item, true);
             if (stackedItem == null || stackedItem.getStackSize() > 0)
                 this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
         }
@@ -100,18 +104,16 @@ public class EntityListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onCreatureSpawn(CreatureSpawnEvent event) {
         LivingEntity entity = event.getEntity();
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(entity.getWorld()))
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled() || stackManager.isEntityStackingTemporarilyDisabled())
+        if (!this.stackManager.isEntityStackingEnabled() || this.stackManager.isEntityStackingTemporarilyDisabled())
             return;
 
         Runnable task = () -> {
             // Try to immediately stack everything except bees from hives and built entities due to them duplicating
-            stackManager.createEntityStack(entity, !DELAYED_SPAWN_REASONS.contains(event.getSpawnReason()));
-            if (entity.isValid())
-                this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
+            this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
+            this.stackManager.createEntityStack(entity, !DELAYED_SPAWN_REASONS.contains(event.getSpawnReason()));
 
             PersistentDataUtils.applyDisabledAi(entity);
         };
@@ -129,28 +131,47 @@ public class EntityListener implements Listener {
         if (!(event.getEntity() instanceof LivingEntity entity) || event.getSpawner() == null)
             return;
 
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(event.getEntity().getWorld()))
+        if (this.stackManager.isAreaDisabled(event.getEntity().getLocation()))
             return;
 
+        this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
+
         PersistentDataUtils.tagSpawnedFromSpawner(entity);
-        if (stackManager.isEntityStackingEnabled() && !stackManager.isEntityStackingTemporarilyDisabled()) {
-            stackManager.createEntityStack(entity, true);
-            if (entity.isValid())
-                this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
-        } else {
-            this.rosePlugin.getManager(EntityCacheManager.class).preCacheEntity(entity);
-        }
+        if (this.stackManager.isEntityStackingEnabled() && !this.stackManager.isEntityStackingTemporarilyDisabled())
+            this.stackManager.createEntityStack(entity, true);
 
-
-        SpawnerStackSettings stackSettings = this.rosePlugin.getManager(StackSettingManager.class).getSpawnerStackSettings(event.getSpawner());
-        StackedSpawner stackedSpawner = stackManager.getStackedSpawner(event.getSpawner().getBlock());
+        SpawnerStackSettings stackSettings = this.stackSettingManager.getSpawnerStackSettings(event.getSpawner());
+        StackedSpawner stackedSpawner = this.stackManager.getStackedSpawner(event.getSpawner().getBlock());
         if (stackedSpawner == null)
-            stackedSpawner = stackManager.createSpawnerStack(event.getSpawner().getBlock(), 1, false);
+            stackedSpawner = this.stackManager.createSpawnerStack(event.getSpawner().getBlock(), 1, false);
 
         boolean placedByPlayer = stackedSpawner != null && stackedSpawner.isPlacedByPlayer();
         if (stackSettings.isMobAIDisabled() && (!SettingKey.SPAWNER_DISABLE_MOB_AI_ONLY_PLAYER_PLACED.get() || placedByPlayer))
             PersistentDataUtils.removeEntityAi(entity);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void onSecondarySpawnerSpawn(CreatureSpawnEvent event) {
+        LivingEntity entity = event.getEntity();
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
+            return;
+
+        if (EntityUtils.hasTrialSpawnerSpawnReason(entity)) {
+            PersistentDataUtils.tagSpawnedFromTrialSpawner(entity);
+            return;
+        }
+
+        if (EntityUtils.hasSpawnerSpawnReason(entity)) {
+            if (PersistentDataUtils.isSpawnedFromSpawner(entity))
+                return;
+
+            // If we haven't already handled this mob as being from a spawner, handle it now
+            PersistentDataUtils.tagSpawnedFromSpawner(entity);
+
+            SpawnerStackSettings stackSettings = this.stackSettingManager.getSpawnerStackSettings(entity.getType());
+            if (stackSettings.isMobAIDisabled())
+                PersistentDataUtils.removeEntityAi(entity);
+        }
     }
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
@@ -161,7 +182,7 @@ public class EntityListener implements Listener {
             return;
 
         boolean disableAttacking = (event.getEntityType() == EntityType.WITHER && PersistentDataUtils.isAiDisabled((Wither) event.getEntity()))
-                || (SettingKey.SPAWNER_DISABLE_ATTACKING.get()) && PersistentDataUtils.isSpawnedFromSpawner((LivingEntity) event.getEntity());
+                || (SettingKey.SPAWNER_DISABLE_ATTACKING.get()) && PersistentDataUtils.isSpawnedFromSpawner(event.getEntity());
         if (disableAttacking)
             event.setCancelled(true);
     }
@@ -178,27 +199,26 @@ public class EntityListener implements Listener {
         if (event.getTo() == null || event.getFrom().getWorld() == event.getTo().getWorld())
             return;
 
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(event.getEntity().getWorld()))
+        if (this.stackManager.isAreaDisabled(event.getEntity().getLocation()))
             return;
 
         Entity entity = event.getEntity();
         if (entity instanceof LivingEntity livingEntity) {
-            if (!stackManager.isEntityStackingEnabled())
+            if (!this.stackManager.isEntityStackingEnabled())
                 return;
 
-            StackedEntity stackedEntity = stackManager.getStackedEntity(livingEntity);
+            StackedEntity stackedEntity = this.stackManager.getStackedEntity(livingEntity);
             if (stackedEntity != null) {
-                stackManager.changeStackingThread(livingEntity.getUniqueId(), stackedEntity, event.getFrom().getWorld(), event.getTo().getWorld());
+                this.stackManager.changeStackingThread(livingEntity.getUniqueId(), stackedEntity, event.getFrom().getWorld(), event.getTo().getWorld());
                 stackedEntity.updateDisplay();
             }
         } else if (entity instanceof Item item) {
-            if (!stackManager.isItemStackingEnabled())
+            if (!this.stackManager.isItemStackingEnabled())
                 return;
 
-            StackedItem stackedItem = stackManager.getStackedItem(item);
+            StackedItem stackedItem = this.stackManager.getStackedItem(item);
             if (stackedItem != null) {
-                stackManager.changeStackingThread(item.getUniqueId(), stackedItem, event.getFrom().getWorld(), event.getTo().getWorld());
+                this.stackManager.changeStackingThread(item.getUniqueId(), stackedItem, event.getFrom().getWorld(), event.getTo().getWorld());
                 stackedItem.updateDisplay();
             }
         }
@@ -216,8 +236,7 @@ public class EntityListener implements Listener {
         if (!(event.getEntity() instanceof LivingEntity entity) || event.getEntity().getType() == EntityType.PLAYER)
             return;
 
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (!SettingKey.ENTITY_INSTANT_KILL_DISABLED_AI.get() || stackManager.isWorldDisabled(entity.getWorld()) || !PersistentDataUtils.isAiDisabled(entity))
+        if (!SettingKey.ENTITY_INSTANT_KILL_DISABLED_AI.get() || this.stackManager.isAreaDisabled(entity.getLocation()) || !PersistentDataUtils.isAiDisabled(entity))
             return;
 
         Entity damager = event.getDamager();
@@ -237,14 +256,13 @@ public class EntityListener implements Listener {
         if (!(event.getEntity() instanceof LivingEntity entity) || event.getEntity().getType() == EntityType.ARMOR_STAND || event.getEntity().getType() == EntityType.PLAYER)
             return;
 
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(entity.getWorld()))
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
-        StackedEntity stackedEntity = stackManager.getStackedEntity(entity);
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity(entity);
         if (stackedEntity == null || stackedEntity.getStackSize() == 1)
             return;
 
@@ -307,20 +325,19 @@ public class EntityListener implements Listener {
     }
 
     private void handleEntityDeath(EntityDeathEvent event, LivingEntity entity) {
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(entity.getWorld()))
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
-        StackedEntity stackedEntity = stackManager.getStackedEntity(entity);
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity(entity);
         if (stackedEntity == null)
             return;
 
         int stackSize = stackedEntity.getStackSize();
         if (stackSize == 1) {
-            stackManager.removeEntityStack(stackedEntity);
+            this.stackManager.removeEntityStack(stackedEntity);
             return;
         }
 
@@ -348,8 +365,8 @@ public class EntityListener implements Listener {
                     }
                 }
 
-                MultikillBound lowerBound = stackManager.getLowerMultikillBound();
-                MultikillBound upperBound = stackManager.getUpperMultikillBound();
+                MultikillBound lowerBound = this.stackManager.getLowerMultikillBound();
+                MultikillBound upperBound = this.stackManager.getUpperMultikillBound();
 
                 int lowerValue = lowerBound.getValue(stackSize);
                 int upperValue = upperBound.getValue(stackSize);
@@ -399,28 +416,30 @@ public class EntityListener implements Listener {
     }
 
     private void handleEntityTransformation(EntityTransformEvent event) {
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(event.getEntity().getWorld()))
+        if (this.stackManager.isAreaDisabled(event.getEntity().getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
+        EntityStackSettings newStackSettings = this.stackSettingManager.getEntityStackSettings(event.getTransformedEntity().getType());
+        boolean aiDisabled = PersistentDataUtils.isAiDisabled((LivingEntity) event.getEntity());
+        boolean fromSpawner = PersistentDataUtils.isSpawnedFromSpawner(event.getEntity());
         if (event.getEntity() instanceof Slime) {
-            if (PersistentDataUtils.isAiDisabled((LivingEntity) event.getEntity()))
+            if (aiDisabled)
                 event.getTransformedEntities().stream().map(x -> (Slime) x).forEach(PersistentDataUtils::removeEntityAi);
-            if (PersistentDataUtils.isSpawnedFromSpawner((LivingEntity) event.getEntity()))
-                event.getTransformedEntities().stream().map(x -> (Slime) x).forEach(PersistentDataUtils::tagSpawnedFromSpawner);
+            if (fromSpawner)
+                event.getTransformedEntities().stream().map(x -> (Slime) x).forEach(newStackSettings::applySpawnerSpawnedProperties);
             return;
         }
 
         if (!(event.getEntity() instanceof LivingEntity)
                 || !(event.getTransformedEntity() instanceof LivingEntity transformedEntity)
                 || event.getEntity().getType() == event.getTransformedEntity().getType()
-                || !stackManager.isEntityStacked((LivingEntity) event.getEntity()))
+                || !this.stackManager.isEntityStacked((LivingEntity) event.getEntity()))
             return;
 
-        StackedEntity stackedEntity = stackManager.getStackedEntity((LivingEntity) event.getEntity());
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity((LivingEntity) event.getEntity());
         if (stackedEntity == null || stackedEntity.getStackSize() == 1)
             return;
 
@@ -429,27 +448,32 @@ public class EntityListener implements Listener {
             event.setCancelled(true);
 
             // Handle mooshroom shearing
-            if (event.getEntityType() == VersionUtils.MOOSHROOM) {
-                EntityStackSettings stackSettings = stackedEntity.getStackSettings();
+            EntityType entityType = event.getEntityType();
+            if (entityType == VersionUtils.MOOSHROOM) {
                 int mushroomsDropped = 5;
-                if (stackSettings.getSettingValue(EntityStackSettings.MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK).getBoolean())
-                    mushroomsDropped += (stackedEntity.getStackSize() - 1) * stackSettings.getSettingValue(EntityStackSettings.MOOSHROOM_EXTRA_MUSHROOMS_PER_COW_IN_STACK).getInt();
+                EntityStackSettings mooshroomStackSettings = stackSettingManager.getEntityStackSettings(entityType);
+                if (mooshroomStackSettings.getSettingValue(EntityStackSettings.MOOSHROOM_DROP_ADDITIONAL_MUSHROOMS_FOR_EACH_COW_IN_STACK).getBoolean())
+                    mushroomsDropped += (stackedEntity.getStackSize() - 1) * stackedEntity.getStackSettings().getSettingValue(EntityStackSettings.MOOSHROOM_EXTRA_MUSHROOMS_PER_COW_IN_STACK).getInt();
 
                 Material dropType = ((MushroomCow) event.getEntity()).getVariant() == Variant.BROWN ? Material.BROWN_MUSHROOM : Material.RED_MUSHROOM;
-                stackManager.preStackItems(GuiUtil.getMaterialAmountAsItemStacks(dropType, mushroomsDropped), event.getEntity().getLocation());
+                this.stackManager.preStackItems(GuiUtil.getMaterialAmountAsItemStacks(dropType, mushroomsDropped), event.getEntity().getLocation());
             }
 
-            boolean aiDisabled = PersistentDataUtils.isAiDisabled((LivingEntity) event.getEntity());
             event.getEntity().remove();
             ThreadUtils.runSync(() -> {
-                stackManager.setEntityStackingTemporarilyDisabled(true);
+                this.stackManager.setEntityStackingTemporarilyDisabled(true);
                 LivingEntity newEntity = serialized.createEntity(transformedEntity.getLocation(), true, transformedEntity.getType());
                 if (aiDisabled)
                     PersistentDataUtils.removeEntityAi(newEntity);
-                StackedEntity newStack = stackManager.createEntityStack(newEntity, false);
-                stackManager.setEntityStackingTemporarilyDisabled(false);
+                if (fromSpawner)
+                    PersistentDataUtils.tagSpawnedFromSpawner(newEntity);
+                StackedEntity newStack = this.stackManager.createEntityStack(newEntity, false);
+                this.stackManager.setEntityStackingTemporarilyDisabled(false);
                 if (newStack == null)
                     return;
+
+                if (fromSpawner)
+                    newStack.getStackSettings().applySpawnerSpawnedProperties(newEntity);
 
                 stackedEntity.getDataStorage().forEach(entity -> {
                     if (aiDisabled)
@@ -459,9 +483,11 @@ public class EntityListener implements Listener {
                 newStack.updateDisplay();
             });
         } else {
-            // Make sure disabled AI gets transferred
-            if (PersistentDataUtils.isAiDisabled((LivingEntity) event.getEntity()))
-                PersistentDataUtils.removeEntityAi((LivingEntity) event.getTransformedEntity());
+            // Make sure disabled AI and from spawner properties get transferred
+            if (aiDisabled)
+                event.getTransformedEntities().stream().map(x -> (LivingEntity) x).forEach(PersistentDataUtils::removeEntityAi);
+            if (fromSpawner)
+                event.getTransformedEntities().stream().map(x -> (LivingEntity) x).forEach(newStackSettings::applySpawnerSpawnedProperties);
 
             if (event.getTransformReason() == TransformReason.LIGHTNING) { // Wait for lightning to disappear
                 ThreadUtils.runSyncDelayed(stackedEntity::decreaseStackSize, 20);
@@ -473,18 +499,25 @@ public class EntityListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onChickenLayEgg(EntityDropItemEvent event) {
-        if (event.getEntityType() != EntityType.CHICKEN || event.getItemDrop().getItemStack().getType() != Material.EGG)
+        if (event.getEntityType() != EntityType.CHICKEN)
             return;
 
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(event.getEntity().getWorld()))
+        Material eggMaterial = event.getItemDrop().getItemStack().getType();
+        switch (eggMaterial.getKey().getKey()) {
+            case "egg", "blue_egg", "brown_egg" -> {}
+            default -> {
+                return;
+            }
+        }
+
+        if (this.stackManager.isAreaDisabled(event.getEntity().getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
         Chicken chickenEntity = (Chicken) event.getEntity();
-        StackedEntity stackedEntity = stackManager.getStackedEntity(chickenEntity);
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity(chickenEntity);
         if (stackedEntity == null || stackedEntity.getStackSize() == 1)
             return;
 
@@ -502,52 +535,59 @@ public class EntityListener implements Listener {
         if (maxAmount > 0)
             amount = Math.min(amount, maxAmount);
 
-        List<ItemStack> items = GuiUtil.getMaterialAmountAsItemStacks(Material.EGG, amount);
-        stackManager.preStackItems(items, event.getEntity().getLocation());
+        List<ItemStack> items = GuiUtil.getMaterialAmountAsItemStacks(eggMaterial, amount);
+        this.stackManager.preStackItems(items, event.getEntity().getLocation());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerShearSheep(PlayerShearEntityEvent event) {
-        this.handleSheepShear(this.rosePlugin, event.getEntity());
+        this.handleSheepShear(event.getEntity());
     }
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onBlockShearSheep(BlockShearEntityEvent event) {
-        this.handleSheepShear(this.rosePlugin, event.getEntity());
+        this.handleSheepShear(event.getEntity());
     }
 
-    private void handleSheepShear(RosePlugin rosePlugin, Entity entity) {
+    private void handleSheepShear(Entity entity) {
         if (entity.getType() != EntityType.SHEEP)
             return;
 
-        StackManager stackManager = rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(entity.getWorld()))
+        if (this.stackManager.isAreaDisabled(entity.getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
         Sheep sheepEntity = (Sheep) entity;
-        StackedEntity stackedEntity = stackManager.getStackedEntity(sheepEntity);
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity(sheepEntity);
         if (stackedEntity == null)
             return;
 
+        if (stackedEntity.getStackSize() == 1) {
+            ThreadUtils.runAsync(() -> {
+                stackedEntity.resetHasMoved();
+                this.stackManager.tryStackEntity(stackedEntity);
+            });
+            return;
+        }
+
         if (!stackedEntity.getStackSettings().getSettingValue(EntityStackSettings.SHEEP_SHEAR_ALL_SHEEP_IN_STACK).getBoolean()) {
             ThreadUtils.runSync(() -> {
-                if (!stackedEntity.shouldStayStacked() && stackedEntity.getStackSize() > 1)
-                    stackManager.splitEntityStack(stackedEntity);
+                if (!stackedEntity.shouldStayStacked())
+                    this.stackManager.splitEntityStack(stackedEntity);
             });
             return;
         }
 
         ShearedHandler shearedHandler = CompatibilityAdapter.getShearedHandler();
         List<ItemStack> drops = new ArrayList<>();
-        stackManager.setEntityUnstackingTemporarilyDisabled(true);
+        this.stackManager.setEntityUnstackingTemporarilyDisabled(true);
         ThreadUtils.runAsync(() -> {
             try {
                 stackedEntity.getDataStorage().forEachTransforming(internal -> {
                     Sheep sheep = (Sheep) internal;
-                    if (!shearedHandler.isSheared(sheep) || stackManager.getEntityDataStorageType(sheep.getType()) == StackedEntityDataStorageType.SIMPLE) {
+                    if (!shearedHandler.isSheared(sheep) || this.stackManager.getEntityDataStorageType(sheep.getType()) == StackedEntityDataStorageType.SIMPLE) {
                         shearedHandler.setSheared(sheep, true);
                         drops.add(new ItemStack(ItemUtils.getWoolMaterial(sheep.getColor()), getWoolDropAmount()));
                         return true;
@@ -557,9 +597,9 @@ public class EntityListener implements Listener {
 
                 Location location = sheepEntity.getLocation();
                 location.add(0, sheepEntity.getEyeHeight(), 0);
-                ThreadUtils.runSync(() -> stackManager.preStackItems(drops, location, false));
+                ThreadUtils.runSync(() -> this.stackManager.preStackItems(drops, location, false));
             } finally {
-                stackManager.setEntityUnstackingTemporarilyDisabled(false);
+                this.stackManager.setEntityUnstackingTemporarilyDisabled(false);
             }
         });
     }
@@ -573,15 +613,14 @@ public class EntityListener implements Listener {
 
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onSheepRegrowWool(SheepRegrowWoolEvent event) {
-        StackManager stackManager = this.rosePlugin.getManager(StackManager.class);
-        if (stackManager.isWorldDisabled(event.getEntity().getWorld()))
+        if (this.stackManager.isAreaDisabled(event.getEntity().getLocation()))
             return;
 
-        if (!stackManager.isEntityStackingEnabled())
+        if (!this.stackManager.isEntityStackingEnabled())
             return;
 
         Sheep sheepEntity = event.getEntity();
-        StackedEntity stackedEntity = stackManager.getStackedEntity(sheepEntity);
+        StackedEntity stackedEntity = this.stackManager.getStackedEntity(sheepEntity);
         if (stackedEntity == null || stackedEntity.getStackSize() == 1)
             return;
 
@@ -601,7 +640,7 @@ public class EntityListener implements Listener {
         ThreadUtils.runAsync(() -> stackedEntity.getDataStorage().forEachTransforming(internal -> {
             Sheep sheep = (Sheep) internal;
             if (shearedHandler.isSheared(sheep) && regrowRemaining.getAndDecrement() > 0) {
-                shearedHandler.setSheared(sheepEntity, false);
+                shearedHandler.setSheared(sheep, false);
                 return true;
             }
             return false;
