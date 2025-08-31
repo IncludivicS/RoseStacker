@@ -26,6 +26,8 @@ import org.bukkit.attribute.AttributeInstance;
 import org.bukkit.entity.EntityType;
 import org.bukkit.entity.ExperienceOrb;
 import org.bukkit.entity.Player;
+import org.bukkit.inventory.Inventory;
+import org.bukkit.inventory.ItemStack;
 import org.bukkit.metadata.MetadataValue;
 import org.bukkit.permissions.Permissible;
 import org.bukkit.permissions.PermissionAttachmentInfo;
@@ -297,6 +299,16 @@ public final class StackerUtils {
         } else {
             return location;
         }
+    }
+
+    public static int countItemInInventory(Inventory inventory, ItemStack itemStack) {
+        int count = 0;
+        for (ItemStack item : inventory.getContents()) {
+            if (item != null && item.isSimilar(itemStack)) {
+                count += item.getAmount();
+            }
+        }
+        return count;
     }
 
 }

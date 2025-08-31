@@ -55,25 +55,9 @@ import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.block.BlockShearEntityEvent;
-import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.entity.*;
 import org.bukkit.event.entity.CreatureSpawnEvent.SpawnReason;
-import org.bukkit.event.entity.EntityCombustByBlockEvent;
-import org.bukkit.event.entity.EntityCombustByEntityEvent;
-import org.bukkit.event.entity.EntityCombustEvent;
-import org.bukkit.event.entity.EntityDamageByEntityEvent;
-import org.bukkit.event.entity.EntityDamageEvent;
-import org.bukkit.event.entity.EntityDeathEvent;
-import org.bukkit.event.entity.EntityDropItemEvent;
-import org.bukkit.event.entity.EntityExplodeEvent;
-import org.bukkit.event.entity.EntityPortalEvent;
-import org.bukkit.event.entity.EntitySpawnEvent;
-import org.bukkit.event.entity.EntityTargetEvent;
-import org.bukkit.event.entity.EntityTeleportEvent;
-import org.bukkit.event.entity.EntityTransformEvent;
 import org.bukkit.event.entity.EntityTransformEvent.TransformReason;
-import org.bukkit.event.entity.PigZapEvent;
-import org.bukkit.event.entity.SheepRegrowWoolEvent;
-import org.bukkit.event.entity.SpawnerSpawnEvent;
 import org.bukkit.event.player.PlayerShearEntityEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.util.Vector;
@@ -661,6 +645,32 @@ public class EntityListener implements Listener {
             }
             return false;
         }));
+    }
+
+    @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
+    public void onSheepDye(SheepDyeWoolEvent event) {
+
+        Sheep sheep = event.getEntity();
+
+        StackManager stackManager = rosePlugin.getManager(StackManager.class);
+        if (stackManager.isWorldDisabled(sheep.getWorld()))
+            return;
+
+        if (!stackManager.isEntityStackingEnabled())
+            return;
+
+        StackedEntity stackedEntity = stackManager.getStackedEntity(sheep);
+
+        if (stackedEntity == null)
+            return;
+
+        if (stackedEntity.getStackSettings().dontStackIfDifferentColor()) {
+            ThreadUtils.runSync(() -> {
+                if (!stackedEntity.shouldStayStacked() && stackedEntity.getStackSize() > 1)
+                    stackManager.splitEntityStack(stackedEntity);
+            });
+        }
+
     }
 
 }

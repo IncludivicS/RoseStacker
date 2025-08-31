@@ -15,29 +15,18 @@ import org.bukkit.Bukkit;
 import org.bukkit.EntityEffect;
 import org.bukkit.GameMode;
 import org.bukkit.Statistic;
-import org.bukkit.entity.Ageable;
-import org.bukkit.entity.Animals;
-import org.bukkit.entity.Cat;
-import org.bukkit.entity.Entity;
-import org.bukkit.entity.Fox;
-import org.bukkit.entity.Frog;
-import org.bukkit.entity.Horse;
-import org.bukkit.entity.LivingEntity;
-import org.bukkit.entity.Llama;
-import org.bukkit.entity.MushroomCow;
-import org.bukkit.entity.Panda;
-import org.bukkit.entity.Player;
-import org.bukkit.entity.Rabbit;
-import org.bukkit.entity.Tameable;
-import org.bukkit.entity.Wolf;
+import org.bukkit.entity.*;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.CreatureSpawnEvent;
 import org.bukkit.event.entity.EntityBreedEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
+import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.material.Colorable;
+
+import java.util.Random;
 
 public class BreedingListener implements Listener {
 
@@ -87,10 +76,14 @@ public class BreedingListener implements Listener {
 
         // Take the items for breeding
         int totalChildren;
-        if (player.getGameMode() != GameMode.CREATIVE) {
+        if (player.getGameMode() != GameMode.CREATIVE && !SettingKey.ENTITY_BREED_WHOLE_INVENTORY.get()) {
             int requiredFood = Math.min(stackSize, breedingItem.getAmount());
             breedingItem.setAmount(breedingItem.getAmount() - requiredFood);
             totalChildren = requiredFood / 2;
+        }else if (SettingKey.ENTITY_BREED_WHOLE_INVENTORY.get()){
+            int totalFood = StackerUtils.countItemInInventory(player.getInventory(), breedingItem);
+            totalChildren = Math.min(stackSize, totalFood / 2);
+            this.removeItemsFromInventory(player, breedingItem, totalFood);
         } else {
             // Creative mode should allow the entire stack to breed half as many babies as the max stack size of the
             // item they are holding, without actually taking any items
@@ -187,6 +180,45 @@ public class BreedingListener implements Listener {
 
         if ((NMSUtil.getVersionNumber() > 20 || (NMSUtil.getVersionNumber() == 20 && NMSUtil.getMinorVersionNumber() >= 6)) && parent instanceof Wolf parentWolf && child instanceof Wolf childWolf)
             childWolf.setVariant(parentWolf.getVariant());
+
+        if ((NMSUtil.getVersionNumber() > 17) && parent instanceof Axolotl parentAxolotl && child instanceof Axolotl childAxolotl) {
+            double blueProbability = 0.00083;
+            Random random = new Random();
+            boolean isBlue = random.nextDouble() < blueProbability;
+            if (isBlue) {
+                childAxolotl.setVariant(Axolotl.Variant.BLUE);
+            } else {
+                childAxolotl.setVariant(parentAxolotl.getVariant());
+            }
+        }
+
+        if (parent instanceof Parrot parentParrot && child instanceof Parrot childParrot) {
+            childParrot.setVariant(parentParrot.getVariant());
+        }
+
+        if (parent instanceof Rabbit parentRabbit && child instanceof Rabbit childRabbit) {
+            childRabbit.setRabbitType(parentRabbit.getRabbitType());
+        }
+
+    }
+
+    private void removeItemsFromInventory(Player player, ItemStack item, int amount) {
+        Inventory inventory = player.getInventory();
+        int remaining = amount;
+        for (int i = 0; i < inventory.getSize(); i++) {
+            ItemStack currentItem = inventory.getItem(i);
+            if (currentItem != null && currentItem.isSimilar(item)) {
+                int itemAmount = currentItem.getAmount();
+                if (itemAmount <= remaining) {
+                    inventory.setItem(i, null);
+                    remaining -= itemAmount;
+                } else {
+                    currentItem.setAmount(itemAmount - remaining);
+                    inventory.setItem(i, currentItem);
+                    break;
+                }
+            }
+        }
     }
 
 }
