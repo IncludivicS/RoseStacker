@@ -129,7 +129,7 @@ public class BreedingListener implements Listener {
         } else {
             // Creative mode should allow the entire stack to breed half as many babies as the max stack size of the
             // item they are holding, without actually taking any items
-            totalChildren = Math.max(1, breedingItem.getMaxStackSize() / 2);
+            totalChildren = Math.min(stackSize / 2, breedingItem.getMaxStackSize() / 2);
         }
 
         if (animal instanceof Axolotl) {
