@@ -144,6 +144,7 @@ public class BreedingListener implements Listener {
 
 
         // Drop experience and spawn entities a few ticks later
+        int f_totalChildren = totalChildren;
         ThreadUtils.runSyncDelayed(() -> {
             ItemStack breedingItemCopy = breedingItem.clone();
             breedingItemCopy.setAmount(1);
